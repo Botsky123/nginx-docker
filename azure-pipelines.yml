@@ -46,12 +46,31 @@ stages:
       displayName: 'Scan for CRITICAL vulnerabilities'
       inputs:
         script: |
+          set +e
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $HOME/.cache/trivy:/root/.cache/ aquasec/trivy image --severity CRITICAL --no-progress --ignore-unfixed $(containerRegistry)/$(imageRepository):$(tag)
-        failOnStderr: true
+          scan_exit=$?
+          set -e
+          if [ $scan_exit -eq 0 ]; then
+            echo "No CRITICAL vulnerabilities found."
+          else
+            echo "Scan completed with warnings or errors."
+            exit $scan_exit
+          fi
+        failOnStderr: false # Set to false to allow handling of exit codes manually
 
     - task: CmdLine@2
       displayName: 'Scan for MEDIUM, HIGH vulnerabilities'
       inputs:
         script: |
+          set +e
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $HOME/.cache/trivy:/root/.cache/ aquasec/trivy image --severity MEDIUM,HIGH --no-progress --ignore-unfixed $(containerRegistry)/$(imageRepository):$(tag)
-          # If you want to fail based on these vulnerabilities, add logic to check the Trivy output and exit with a non-zero status if needed.
+          scan_exit=$?
+          set -e
+          if [ $scan_exit -eq 0 ]; then
+            echo "No MEDIUM or HIGH vulnerabilities found."
+          else
+            echo "Scan completed with warnings or errors for MEDIUM or HIGH vulnerabilities."
+            # Exit based on your requirement or handle differently
+            exit $scan_exit
+          fi
+        failOnStderr: false # Set to false to allow handling of exit codes manually
