@@ -34,6 +34,13 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
+    
+    # New task to update Trivy DB
+    - task: CmdLine@2
+      displayName: 'Update Trivy DB'
+      inputs:
+        script: |
+          docker run --rm -v $HOME/.cache/trivy:/root/.cache/ aquasec/trivy image --download-db-only
 
     - task: CmdLine@2
       displayName: 'Scan for CRITICAL vulnerabilities'
