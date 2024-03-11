@@ -1,0 +1,65 @@
+trigger:
+- main
+
+resources:
+- repo: self
+
+variables:
+  dockerRegistryServiceConnection: 'eebcb430-8f14-4c26-829f-ce06ec64c177'
+  imageRepository: 'botskynginxdocker'
+  containerRegistry: 'testcontainerregistrydemo.azurecr.io'
+  dockerfilePath: '$(Build.SourcesDirectory)/ACRTasks/dockerfile'
+  tag: '$(Build.BuildId)'
+  vmImageName: 'ubuntu-latest'
+  clairServerUrl: 'http://172.208.88.203:6060'
+
+stages:
+- stage: Build
+  displayName: Build and push stage
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    - task: Docker@2
+      displayName: Build an image
+      inputs:
+        command: build
+        repository: $(imageRepository)
+        dockerfile: $(dockerfilePath)
+        tags: |
+          $(tag)
+
+    - script: |
+        docker save -o $(imageRepository).tar $(imageRepository):$(tag)
+      displayName: 'Save Docker image to tarball'
+
+    - script: |
+        wget https://github.com/arminc/clair-scanner/releases/download/v12/clair-scanner_linux_amd64
+        mv clair-scanner_linux_amd64 clair-scanner
+        chmod +x clair-scanner
+      displayName: 'Install clair-scanner'
+
+    - script: |
+        ./clair-scanner --clair="${clairServerUrl}" --ip="YOUR_AGENT_IP" --reportAll=true --log=debug --reportPath=clair-report.json $(imageRepository).tar || true
+      displayName: 'Scan Docker image with clair-scanner'
+      env:
+        YOUR_AGENT_IP: 'Host IP where Clair can reach this scanner'
+
+    - script: |
+        if grep -q "High" clair-report.json; then
+          echo "High vulnerabilities found, failing build"
+          exit 1
+        fi
+      displayName: 'Check for vulnerabilities'
+
+    - task: Docker@2
+      displayName: Push an image to container registry
+      inputs:
+        command: push
+        repository: $(imageRepository)
+        dockerfile: $(dockerfilePath)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          $(tag)
