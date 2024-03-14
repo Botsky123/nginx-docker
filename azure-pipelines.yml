@@ -9,7 +9,7 @@ resources:
 - repo: self
 
 variables:
-  dockerRegistryServiceConnection: 'fc95c664-7891-4a04-ac59-1b03b8dc7c16'
+  dockerRegistryServiceConnection: 'docker_registry_service_connection'
   imageRepository: 'botskynginxdocker'
   containerRegistry: 'testcontainerregistrydemo.azurecr.io'
   dockerfilePath: '$(Build.SourcesDirectory)/ACRTasks/dockerfile'
