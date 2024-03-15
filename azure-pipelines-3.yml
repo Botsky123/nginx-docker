@@ -1,0 +1,63 @@
+trigger:
+- main
+
+resources:
+- repo: self
+
+variables:
+  tag: '$(Build.BuildId)'
+  image_name: 'botskynginxdocker' # Updated to your image name
+  image_tag: '$(Build.BuildId)' # Use the Build ID as the image tag
+  clair_db: 'arminc/clair-db:latest'
+  clair_scan: 'arminc/clair-local-scan:latest'
+  clair_scanner: 'objectiflibre/clair-scanner:latest'
+  report_directory: 'report'
+  dockerfilePath: '$(Build.SourcesDirectory)/ACRTasks/dockerfile' # Path to your Dockerfile
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+jobs:
+- job: BuildAndScan
+  displayName: 'Build and Scan Image'
+  steps:
+  - task: Docker@2
+    displayName: 'Build and Push Docker Image'
+    inputs:
+      command: buildAndPush
+      containerRegistry: 'docker_registry'
+      repository: '$(image_name)'
+      dockerfile: '$(dockerfilePath)'
+      tags: |
+        $(image_tag)
+
+  - script: |
+      mkdir $(report_directory)
+
+      docker run -d --name clair-db $(clair_db)
+      docker run -p 6060:6060 --link clair-db:postgres -d --name clair $(clair_scan)
+      MY_IP=$(hostname -I | awk '{print $1}')
+      echo $MY_IP
+      sleep 10
+      CLAIR_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' clair)
+      docker pull $(clair_scanner)
+      
+      # Your existing clair-scanner command
+      ./clair-scanner --clair=http://172.20.0.2:6060 --ip=10.0.0.5 -r ~/saved-images/scan-report.json nginx:latest
+      echo "testing"
+      docker run --network host -v /var/run/docker.sock:/var/run/docker.sock $(clair_scanner) --clair=http://$172.20.0.2:6060 $(image_name):$(image_tag) | tee ./report/clair-image-scan-report.txt
+
+      docker stop clair
+      docker rm clair
+      docker stop clair-db
+      docker rm clair-db
+    displayName: 'Scan image with Clair'
+    continueOnError: true
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish vulnerabilities report'
+    inputs:
+      PathtoPublish: '$(Build.SourcesDirectory)/$(report_directory)'
+      ArtifactName: 'VulnerabilitiesReport'
+      publishLocation: 'Container'
+ 
