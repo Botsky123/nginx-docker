@@ -11,19 +11,16 @@ resources:
 variables:
   dockerRegistryServiceConnection: 'docker_registry_service_connection'
   imageRepository: 'botskynginxdocker'
-  containerRegistry: 'testcontainerregistrydemo.azurecr.io'
   dockerfilePath: '$(Build.SourcesDirectory)/ACRTasks/dockerfile'
   tag: '$(Build.BuildId)'
   vmImageName: 'ubuntu-latest'
   clair_db: 'arminc/clair-db:latest'
   clair_scan: 'arminc/clair-local-scan:latest'
-  clair_scanner: 'objectiflibre/clair-scanner:latest'
   report_directory: 'report'
-  clairServerUrl: 'http://20.15.109.18:6060'
 
 stages:
 - stage: Build
-  displayName: Build and push stage
+  displayName: Build Stage
   jobs:
   - job: Build
     displayName: Build
@@ -50,24 +47,29 @@ stages:
       displayName: 'Install clair-scanner'
 
     - script: |
-        ./clair-scanner --clair="${clairServerUrl}" --ip="10.0.0.5" --reportAll=true --log=debug --reportPath=clair-report.json $(imageRepository).tar || true
+        ./clair-scanner -c http://localhost:6060 --ip $(hostname -i) -r $(Build.SourcesDirectory)/$(report_directory)/scan-report.json $(imageRepository).tar || true
       displayName: 'Scan Docker image with clair-scanner'
-      env:
-        10.0.0.5: 'Host IP where Clair can reach this scanner'
 
     - script: |
-        if grep -q "High" clair-report.json; then
+        if grep -q "High" scan-report.json; then
           echo "High vulnerabilities found, failing build"
           exit 1
         fi
       displayName: 'Check for vulnerabilities'
 
-    - task: Docker@2
-      displayName: Push an image to container registry
-      inputs:
-        command: push
-        repository: $(imageRepository)
-        dockerfile: $(dockerfilePath)
-        containerRegistry: $(dockerRegistryServiceConnection)
-        tags: |
-          $(tag)
+    - script: |
+        docker stop clair
+        docker rm clair
+        docker stop clair-db
+        docker rm clair-db
+      displayName: 'Stop Clair services'
+    continueOnError: true
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish vulnerabilities report'
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: 'VulnerabilitiesReport'
+      publishLocation: 'Container'
+
+  
