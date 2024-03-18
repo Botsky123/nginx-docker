@@ -47,7 +47,7 @@ stages:
       displayName: 'Install clair-scanner'
 
     - script: |
-        ./clair-scanner -c http://localhost:6060 --ip $(hostname -i) -r $(Build.SourcesDirectory)/$(report_directory)/scan-report.json $(imageRepository).tar || true
+        ./clair-scanner -c http://localhost:6060 --ip $(hostname -i) -r $(Build.SourcesDirectory)/$(report_directory)/scan-report.json $(imageRepository) || true
       displayName: 'Scan Docker image with clair-scanner'
 
     - script: |
