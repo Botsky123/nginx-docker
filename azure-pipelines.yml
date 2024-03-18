@@ -65,11 +65,9 @@ stages:
       displayName: 'Stop Clair services'
     continueOnError: true
 
-  - task: PublishBuildArtifacts@1
-    displayName: 'Publish vulnerabilities report'
-    inputs:
-      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      ArtifactName: 'VulnerabilitiesReport'
-      publishLocation: 'Container'
-
-  
+  # - task: PublishBuildArtifacts@1
+  #   displayName: 'Publish vulnerabilities report'
+  #   inputs:
+  #     PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+  #     ArtifactName: 'VulnerabilitiesReport'
+  #     publishLocation: 'Container'
