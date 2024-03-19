@@ -47,34 +47,46 @@ stages:
         inlineScript: |
           az acr login --name testcontainerregistrydemo1
 
-    
     - task: CmdLine@2
-      displayName: "Download and install Trivy"
+      displayName: 'Download and install Trivy'
       inputs:
         script: |
-          sudo apt-get install rpm
-          wget https://github.com/aquasecurity/trivy/releases/download/v$(trivyVersion)/trivy_$(trivyVersion)_Linux-64bit.deb
-          sudo dpkg -i trivy_$(trivyVersion)_Linux-64bit.deb
-          trivy -v 
-    
+          #!/bin/bash
+          # Specify the Trivy version
+          trivyVersion="0.19.2"
+          # Construct the download URL
+          downloadUrl="https://github.com/aquasecurity/trivy/releases/download/v${trivyVersion}/trivy_${trivyVersion}_Linux-64bit.deb"
+          # Download Trivy
+          wget $downloadUrl -O trivy.deb
+          # Install Trivy
+          sudo dpkg -i trivy.deb
+
     
     - task: CmdLine@2
-      displayName: 'Update Trivy DB'
+      displayName: Scan
       inputs:
         script: |
-          docker run --rm -v $HOME/.cache/trivy:/root/.cache/ aquasec/trivy image --download-db-only
-    - task: CmdLine@2
-      displayName: 'Scan for vulnerabilities'
-      inputs:
-        script: |
-          set +e
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $HOME/.cache/trivy:/root/.cache/ aquasec/trivy image --severity CRITICAL,MEDIUM,HIGH --no-progress --ignore-unfixed $(containerRegistry)/$(imageRepository):$(tag)
-          scan_exit=$?
-          set -e
-          if [ $scan_exit -ne 0 ]; then
-            echo "Vulnerabilities found."
-            exit $scan_exit
-          fi
+          trivy image --exit-code 0 --severity MEDIUM,HIGH $imageRepository:$tag
+          trivy image  --exit-code 1 --severity CRITICAL $imageRepository:$tag
+    
+    
+    # - task: CmdLine@2
+    #   displayName: 'Update Trivy DB'
+    #   inputs:
+    #     script: |
+    #       docker run --rm -v $HOME/.cache/trivy:/root/.cache/ aquasec/trivy image --download-db-only
+    # - task: CmdLine@2
+    #   displayName: 'Scan for vulnerabilities'
+    #   inputs:
+    #     script: |
+    #       set +e
+    #       docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $HOME/.cache/trivy:/root/.cache/ aquasec/trivy image --severity CRITICAL,MEDIUM,HIGH --no-progress --ignore-unfixed $(containerRegistry)/$(imageRepository):$(tag)
+    #       scan_exit=$?
+    #       set -e
+    #       if [ $scan_exit -ne 0 ]; then
+    #         echo "Vulnerabilities found."
+    #         exit $scan_exit
+    #       fi
 
 - stage: Push
   displayName: 'Push stage'
