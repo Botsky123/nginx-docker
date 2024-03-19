@@ -30,6 +30,9 @@ stages:
         tags: |
           $(tag)
 
+    - script: docker images
+      displayName: 'List Docker Images'
+
 - stage: Scan
   displayName: 'Scan stage'
   jobs:
@@ -97,7 +100,7 @@ stages:
   condition: succeeded('Scan')
   jobs:
   - job: Push
-    displayName: 'Push to ACR'
+    displayName: 'Push Image to ACR'
     pool:
       vmImage: $(vmImageName)
     steps:
@@ -105,7 +108,7 @@ stages:
       displayName: 'Push image to ACR'
       inputs:
         command: push
-        repository: $(imageRepository)
+        repository: $(containerRegistry)/$(imageRepository)
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
