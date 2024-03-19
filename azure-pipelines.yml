@@ -108,7 +108,7 @@ stages:
       displayName: 'Push image to ACR'
       inputs:
         command: push
-        repository: $(containerRegistry)/$(imageRepository):$(tag)
+        repository: testcontainerregistrydemo1/$(imageRepository):$(tag)
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: $(tag)
    
