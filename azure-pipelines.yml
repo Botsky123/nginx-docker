@@ -110,4 +110,5 @@ stages:
         command: push
         repository: $(containerRegistry)/$(imageRepository):$(tag)
         containerRegistry: $(dockerRegistryServiceConnection)
+        tags: $(tag)
    
