@@ -41,7 +41,7 @@ stages:
     - task: AzureCLI@2
       displayName: 'Login to Azure Container Registry'
       inputs:
-        azureSubscription: azure_service_connection
+        azureSubscription: 'azure_service_connection'
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
