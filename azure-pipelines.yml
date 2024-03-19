@@ -9,7 +9,7 @@ variables:
   imageRepository: 'botskynginxdocker'
   containerRegistry: 'testcontainerregistrydemo1.azurecr.io'
   dockerfilePath: '$(Build.SourcesDirectory)/ACRTasks/dockerfile'
-  tag: '$(Build.BuildId)'
+  tag: '74'
   vmImageName: 'ubuntu-latest'
 
 stages:
