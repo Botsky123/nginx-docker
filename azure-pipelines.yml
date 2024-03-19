@@ -11,16 +11,14 @@ resources:
 variables:
   dockerRegistryServiceConnection: 'docker_registry_service_connection'
   imageRepository: 'botskynginxdocker'
+  containerRegistry: 'testcontainerregistrydemo.azurecr.io'
   dockerfilePath: '$(Build.SourcesDirectory)/ACRTasks/dockerfile'
   tag: '$(Build.BuildId)'
   vmImageName: 'ubuntu-latest'
-  clair_db: 'arminc/clair-db:latest'
-  clair_scan: 'arminc/clair-local-scan:latest'
-  report_directory: 'report'
 
 stages:
 - stage: Build
-  displayName: Build Stage
+  displayName: Build and push stage
   jobs:
   - job: Build
     displayName: Build
@@ -28,46 +26,53 @@ stages:
       vmImage: $(vmImageName)
     steps:
     - task: Docker@2
-      displayName: Build an image
+      displayName: Build and push an image to container registry
       inputs:
-        command: build
+        command: buildAndPush
         repository: $(imageRepository)
         dockerfile: $(dockerfilePath)
+        containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
+    
+    # New task to update Trivy DB
+    - task: CmdLine@2
+      displayName: 'Update Trivy DB'
+      inputs:
+        script: |
+          docker run --rm -v $HOME/.cache/trivy:/root/.cache/ aquasec/trivy image --download-db-only
 
-    - script: |
-        docker save -o $(imageRepository).tar $(imageRepository):$(tag)
-      displayName: 'Save Docker image to tarball'
+    - task: CmdLine@2
+      displayName: 'Scan for CRITICAL vulnerabilities'
+      inputs:
+        script: |
+          set +e
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $HOME/.cache/trivy:/root/.cache/ aquasec/trivy image --severity CRITICAL --no-progress --ignore-unfixed $(containerRegistry)/$(imageRepository):$(tag)
+          scan_exit=$?
+          set -e
+          if [ $scan_exit -eq 0 ]; then
+            echo "No CRITICAL vulnerabilities found."
+          else
+            echo "Scan completed with warnings or errors."
+            exit $scan_exit
+          fi
+        failOnStderr: false # Set to false to allow handling of exit codes manually
 
-    - script: |
-        wget https://github.com/arminc/clair-scanner/releases/download/v12/clair-scanner_linux_amd64
-        mv clair-scanner_linux_amd64 clair-scanner
-        chmod +x clair-scanner
-      displayName: 'Install clair-scanner'
+    - task: CmdLine@2
+      displayName: 'Scan for MEDIUM, HIGH vulnerabilities'
+      inputs:
+        script: |
+          set +e
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $HOME/.cache/trivy:/root/.cache/ aquasec/trivy image --severity MEDIUM,HIGH --no-progress --ignore-unfixed $(containerRegistry)/$(imageRepository):$(tag)
+          scan_exit=$?
+          set -e
+          if [ $scan_exit -eq 0 ]; then
+            echo "No MEDIUM or HIGH vulnerabilities found."
+          else
+            echo "Scan completed with warnings or errors for MEDIUM or HIGH vulnerabilities."
+            # Exit based on your requirement or handle differently
+            exit $scan_exit
+          fi
+        failOnStderr: false # Set to false to allow handling of exit codes manually
 
-    - script: |
-        ./clair-scanner -c http://localhost:6060 --ip $(hostname -i) -r $(Build.SourcesDirectory)/$(report_directory)/scan-report.json $(imageRepository) || true
-      displayName: 'Scan Docker image with clair-scanner'
 
-    - script: |
-        if grep -q "High" scan-report.json; then
-          echo "High vulnerabilities found, failing build"
-          exit 1
-        fi
-      displayName: 'Check for vulnerabilities'
-
-    - script: |
-        docker stop clair
-        docker rm clair
-        docker stop clair-db
-        docker rm clair-db
-      displayName: 'Stop Clair services'
-    continueOnError: true
-
-  # - task: PublishBuildArtifacts@1
-  #   displayName: 'Publish vulnerabilities report'
-  #   inputs:
-  #     PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-  #     ArtifactName: 'VulnerabilitiesReport'
-  #     publishLocation: 'Container'
