@@ -43,14 +43,14 @@ stages:
     pool:
       vmImage: $(vmImageName)
     steps:
-    - task: AzureCLI@2
-      displayName: 'Login to Azure Container Registry'
-      inputs:
-        azureSubscription: 'azure_service_connection'
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          az acr login --name testcontainerregistrydemo1
+    # - task: AzureCLI@2
+    #   displayName: 'Login to Azure Container Registry'
+    #   inputs:
+    #     azureSubscription: 'azure_service_connection'
+    #     scriptType: 'bash'
+    #     scriptLocation: 'inlineScript'
+    #     inlineScript: |
+    #       az acr login --name testcontainerregistrydemo1
 
     - task: CmdLine@2
       displayName: 'Download and install Trivy'
@@ -71,17 +71,18 @@ stages:
       displayName: Scanning Docker Image
       inputs:
         script: |
-          # Ensure the report directory exists
           mkdir -p $(Build.SourcesDirectory)/${{ variables.report_directory }}
           # Scan the image with Trivy
           # Exit code 0 for MEDIUM, HIGH to not fail the pipeline but show vulnerabilities
           trivy image --exit-code 0 --severity MEDIUM,HIGH ${{ variables.containerRegistry }}/${{ variables.imageRepository }}:${{ variables.tag }}
           # Exit code 1 for CRITICAL to fail the pipeline if critical vulnerabilities are found
-          trivy image --exit-code 1 --severity CRITICAL ${{ variables.containerRegistry }}/${{ variables.imageRepository }}:${{ variables.tag }} -o $(Build.SourcesDirectory)/${{ variables.report_directory }}/trivy-report.json
+          trivy image --exit-code 1 --severity CRITICAL --output $(Build.SourcesDirectory)/${{ variables.report_directory }}/trivy-report.json ${{ variables.containerRegistry }}/${{ variables.imageRepository }}:${{ variables.tag }}
+          # Display the Trivy report for debugging
           cat $(Build.SourcesDirectory)/${{ variables.report_directory }}/trivy-report.json
 
     - task: PublishBuildArtifacts@1
       displayName: 'Publish vulnerabilities report'
+      condition: succeeded()
       inputs:
         PathtoPublish: '$(Build.SourcesDirectory)/${{ variables.report_directory }}'
         ArtifactName: 'VulnerabilitiesReport'
